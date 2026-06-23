@@ -8,7 +8,6 @@ import {
   ChevronDown,
   Clock3,
   Grid3X3,
-  Layers3,
   MapPin,
   UserSquare2,
   X
@@ -340,124 +339,114 @@ export function ReservationApp({
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col bg-white">
-      <header className="border-b border-zinc-100 px-5 pb-4 pt-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[13px] font-medium text-teal-700">K2 시설 예약</p>
-            <h1 className="mt-1 text-xl font-bold tracking-normal text-zinc-950">
-              {userName}님 환영합니다
-            </h1>
+      <div className="sticky top-0 z-30 border-b border-zinc-100 bg-white/95 backdrop-blur">
+        <header className="px-5 pb-3 pt-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 text-[13px] font-semibold text-zinc-900">
+              <span>의과대학 시설 예약</span>
+              <span className="mx-2 text-zinc-300">·</span>
+              <span className="truncate text-zinc-600">{userName}</span>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsMyReservationsOpen(true)}
+                title="나의 예약"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-700 transition hover:bg-zinc-50 active:scale-95"
+              >
+                <UserSquare2 aria-hidden="true" className="h-4 w-4" />
+                <span className="sr-only">나의 예약</span>
+              </button>
+              <LogoutButton />
+            </div>
           </div>
-          <LogoutButton />
-        </div>
+        </header>
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setIsMyReservationsOpen(true)}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-zinc-200 text-sm font-semibold text-zinc-900"
-          >
-            <UserSquare2 aria-hidden="true" className="h-4 w-4" />
-            나의 예약
-          </button>
+        <section className="px-5 pb-3">
+          <div className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-zinc-800">
+            <MapPin aria-hidden="true" className="h-4 w-4 text-teal-700" />
+            시설 선택
+          </div>
+
           <button
             type="button"
             onClick={() => setIsFacilitySheetOpen(true)}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-zinc-950 text-sm font-semibold text-white"
+            className="flex h-11 w-full items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-left"
           >
-            <Layers3 aria-hidden="true" className="h-4 w-4" />
-            시설 선택
-          </button>
-        </div>
-      </header>
-
-      <section className="border-b border-zinc-100 px-5 py-4">
-        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-800">
-          <MapPin aria-hidden="true" className="h-4 w-4 text-teal-700" />
-          선택 시설
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setIsFacilitySheetOpen(true)}
-          className="flex h-14 w-full items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-4 text-left"
-        >
-          <div>
-            <p className="text-[12px] font-medium text-zinc-500">현재 선택</p>
-            <p className="mt-1 text-[15px] font-semibold text-zinc-950">
+            <p className="truncate text-sm font-semibold text-zinc-950">
               {selectedFacility?.name ?? "시설을 선택해 주세요"}
             </p>
-          </div>
-          <ChevronDown aria-hidden="true" className="h-5 w-5 text-zinc-500" />
-        </button>
+            <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-zinc-500" />
+          </button>
 
-        {facilityList.length === 0 ? (
-          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-            등록된 시설이 없습니다.
-          </p>
-        ) : null}
-      </section>
+          {facilityList.length === 0 ? (
+            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+              등록된 시설이 없습니다.
+            </p>
+          ) : null}
+        </section>
+
+        <section className="px-5 pb-3">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-[13px] font-semibold text-zinc-800">
+              <CalendarDays aria-hidden="true" className="h-4 w-4 text-teal-700" />
+              날짜
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsCalendarSheetOpen(true)}
+              className="inline-flex h-7 items-center justify-center gap-1.5 rounded-full border border-zinc-200 px-2.5 text-xs font-semibold text-zinc-700"
+            >
+              <Grid3X3 aria-hidden="true" className="h-3.5 w-3.5" />
+              달력
+            </button>
+          </div>
+          <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+            {dates.map((date) => {
+              const isSelected = date.value === selectedDate;
+
+              return (
+                <button
+                  key={date.value}
+                  ref={(node) => {
+                    if (node) {
+                      dateButtonRefs.current.set(date.value, node);
+                    } else {
+                      dateButtonRefs.current.delete(date.value);
+                    }
+
+                    if (date.isToday) {
+                      todayButtonRef.current = node;
+                    }
+                  }}
+                  type="button"
+                  onClick={() => handleDateChange(date.value)}
+                  className={[
+                    "flex h-[56px] min-w-[48px] flex-col items-center justify-center rounded-lg border px-2 transition active:scale-[0.98]",
+                    isSelected
+                      ? "border-zinc-950 bg-zinc-950 text-white"
+                      : "border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50"
+                  ].join(" ")}
+                >
+                  <span className="text-[11px] font-medium opacity-75">
+                    {date.weekday}
+                  </span>
+                  <span className="mt-0.5 text-base font-bold">{date.day}</span>
+                  <span className="text-[10px] opacity-70">
+                    {date.isToday ? "오늘" : date.month}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      </div>
 
       {isAdmin ? (
         <AdminFacilityManager facilities={facilityList} onRefresh={refreshFacilities} />
       ) : null}
 
-      <section className="border-b border-zinc-100 px-5 py-4">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-zinc-800">
-            <CalendarDays aria-hidden="true" className="h-4 w-4 text-teal-700" />
-            날짜
-          </div>
-          <button
-            type="button"
-            onClick={() => setIsCalendarSheetOpen(true)}
-            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-full border border-zinc-200 px-3 text-xs font-semibold text-zinc-700"
-          >
-            <Grid3X3 aria-hidden="true" className="h-3.5 w-3.5" />
-            달력
-          </button>
-        </div>
-        <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
-          {dates.map((date) => {
-            const isSelected = date.value === selectedDate;
-
-            return (
-              <button
-                key={date.value}
-                ref={(node) => {
-                  if (node) {
-                    dateButtonRefs.current.set(date.value, node);
-                  } else {
-                    dateButtonRefs.current.delete(date.value);
-                  }
-
-                  if (date.isToday) {
-                    todayButtonRef.current = node;
-                  }
-                }}
-                type="button"
-                onClick={() => handleDateChange(date.value)}
-                className={[
-                  "flex h-[70px] min-w-[56px] flex-col items-center justify-center rounded-lg border px-2 transition active:scale-[0.98]",
-                  isSelected
-                    ? "border-zinc-950 bg-zinc-950 text-white"
-                    : "border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50"
-                ].join(" ")}
-              >
-                <span className="text-[12px] font-medium opacity-80">
-                  {date.weekday}
-                </span>
-                <span className="mt-1 text-lg font-bold">{date.day}</span>
-                <span className="text-[11px] opacity-70">
-                  {date.isToday ? "오늘" : date.month}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="flex min-h-0 flex-1 flex-col px-5 py-4">
+      <section className="px-5 py-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm font-semibold text-zinc-800">
             <Clock3 aria-hidden="true" className="h-4 w-4 text-teal-700" />
@@ -475,7 +464,7 @@ export function ReservationApp({
         ) : null}
 
         <div
-          className="no-scrollbar h-[min(48dvh,420px)] min-h-[260px] overflow-y-auto pb-28"
+          className="pb-28"
           onClick={() => {
             if (draftStart !== null || selectedRange !== null) {
               resetSelection();
@@ -514,7 +503,7 @@ export function ReservationApp({
                   reservationForHour.start_time
                 );
               const rowClassName = [
-                "flex min-h-[62px] w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition",
+                "scroll-mt-[220px] flex min-h-[62px] w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition",
                 isReserved || isPastSlot
                   ? "border-zinc-200 bg-zinc-100 text-zinc-500"
                   : isInRange || isDraftStart
