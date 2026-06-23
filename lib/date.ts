@@ -107,6 +107,10 @@ export function canCancelReservation(reservationDate: string, startTime: number)
   return startTime > now.hour;
 }
 
+export function canReserveReservation(reservationDate: string, startTime: number) {
+  return canCancelReservation(reservationDate, startTime);
+}
+
 export function getReservationStatus(
   reservationDate: string,
   startTime: number,

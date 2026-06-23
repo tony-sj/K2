@@ -6,7 +6,7 @@ import {
   isAdminEmail,
   isAllowedSchoolEmail
 } from "@/lib/auth";
-import { canCancelReservation } from "@/lib/date";
+import { canCancelReservation, canReserveReservation } from "@/lib/date";
 import { createClient } from "@/lib/supabase/server";
 
 type CreateReservationInput = {
@@ -84,6 +84,10 @@ export async function createReservation(
 
   if (!user) {
     return { ok: false, message: message ?? "로그인이 필요합니다." };
+  }
+
+  if (!canReserveReservation(input.reservationDate, input.startTime)) {
+    return { ok: false, message: "이미 지난 시간은 예약할 수 없습니다." };
   }
 
   const { data: conflicts, error: conflictError } = await supabase

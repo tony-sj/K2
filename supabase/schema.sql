@@ -98,6 +98,14 @@ as $$
     );
 $$;
 
+create or replace function public.can_reserve_reservation(target_date date, target_start_time integer)
+returns boolean
+language sql
+stable
+as $$
+  select public.can_cancel_reservation(target_date, target_start_time);
+$$;
+
 alter table public.profiles enable row level security;
 alter table public.facilities enable row level security;
 alter table public.reservations enable row level security;
@@ -149,7 +157,11 @@ drop policy if exists "Reservations can be inserted by owner" on public.reservat
 create policy "Reservations can be inserted by owner"
 on public.reservations for insert
 to authenticated
-with check (auth.uid() = user_id and public.is_med_kku_user());
+with check (
+  auth.uid() = user_id
+  and public.is_med_kku_user()
+  and public.can_reserve_reservation(reservation_date, start_time)
+);
 
 drop policy if exists "Reservations can be deleted by owner" on public.reservations;
 create policy "Reservations can be deleted by owner"

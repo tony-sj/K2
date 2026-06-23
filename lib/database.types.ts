@@ -104,6 +104,10 @@ export type Database = {
         Args: { target_date: string; target_start_time: number };
         Returns: boolean;
       };
+      can_reserve_reservation: {
+        Args: { target_date: string; target_start_time: number };
+        Returns: boolean;
+      };
       is_admin_user: {
         Args: Record<PropertyKey, never>;
         Returns: boolean;

@@ -15,7 +15,7 @@ import {
 import { createReservation } from "@/app/actions";
 import { AdminFacilityManager } from "@/components/admin-facility-manager";
 import { LogoutButton } from "@/components/logout-button";
-import { formatHour, getDateOptions } from "@/lib/date";
+import { canReserveReservation, formatHour, getDateOptions } from "@/lib/date";
 import type { Facility, Reservation } from "@/lib/database.types";
 import { createClient } from "@/lib/supabase/client";
 
@@ -187,6 +187,10 @@ export function ReservationApp({
   };
 
   const handleHourClick = (hour: number) => {
+    if (!selectedDate || !canReserveReservation(selectedDate, hour)) {
+      return;
+    }
+
     if (reservedHours.has(hour)) {
       return;
     }
@@ -214,6 +218,13 @@ export function ReservationApp({
 
   const handleSubmit = () => {
     if (!selectedRange || selectedFacilityId === undefined || !selectedDate) {
+      return;
+    }
+
+    if (!canReserveReservation(selectedDate, selectedRange.start)) {
+      resetSelection();
+      setNotice("이미 지난 시간은 예약할 수 없습니다.");
+      window.alert("이미 지난 시간은 예약할 수 없습니다.");
       return;
     }
 
@@ -365,6 +376,9 @@ export function ReservationApp({
             {HOURS.map((hour) => {
               const reservationForHour = getReservationForHour(selectedReservations, hour);
               const isReserved = Boolean(reservationForHour);
+              const isPastSlot = selectedDate
+                ? !canReserveReservation(selectedDate, hour)
+                : false;
               const isMine = reservationForHour?.user_id === currentUserId;
               const isDraftStart = draftStart === hour;
               const isInRange =
@@ -376,11 +390,11 @@ export function ReservationApp({
                 <button
                   key={hour}
                   type="button"
-                  disabled={isReserved || !selectedFacility}
+                  disabled={isReserved || isPastSlot || !selectedFacility}
                   onClick={() => handleHourClick(hour)}
                   className={[
                     "flex min-h-[62px] w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition active:scale-[0.99] disabled:active:scale-100",
-                    isReserved
+                    isReserved || isPastSlot
                       ? "border-zinc-200 bg-zinc-100 text-zinc-500"
                       : isInRange || isDraftStart
                         ? "border-teal-700 bg-teal-50 text-teal-950"
@@ -396,6 +410,8 @@ export function ReservationApp({
                         ? isMine
                           ? `${reservationForHour?.reserved_by_name} · 내 예약`
                           : `${reservationForHour?.reserved_by_name} 예약`
+                        : isPastSlot
+                          ? "지난 시간"
                         : isDraftStart
                           ? "시작 시간 선택됨"
                           : isInRange
@@ -406,6 +422,8 @@ export function ReservationApp({
                   <span className="ml-3 shrink-0 text-xs font-semibold">
                     {isReserved
                       ? "예약됨"
+                      : isPastSlot
+                        ? "불가"
                       : isDraftStart
                         ? "시작"
                         : isInRange
@@ -432,7 +450,13 @@ export function ReservationApp({
         </div>
         <button
           type="button"
-          disabled={!selectedRange || !selectedFacility || isPending}
+          disabled={
+            !selectedRange ||
+            !selectedFacility ||
+            !selectedDate ||
+            !canReserveReservation(selectedDate, selectedRange.start) ||
+            isPending
+          }
           onClick={handleSubmit}
           className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-teal-700 px-4 text-[15px] font-semibold text-white shadow-soft transition active:scale-[0.99] disabled:bg-zinc-200 disabled:text-zinc-500 disabled:shadow-none"
         >
