@@ -1,12 +1,21 @@
 const KOREAN_WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const SEOUL_TIME_ZONE = "Asia/Seoul";
+export const RESERVATION_HISTORY_START_DATE = "2026-01-01";
+export const RESERVATION_FUTURE_DAYS = 14;
 
 export type DateOption = {
   value: string;
   weekday: string;
   day: string;
   month: string;
+  year: string;
   isToday: boolean;
+};
+
+export type MonthOption = {
+  key: string;
+  label: string;
+  dates: DateOption[];
 };
 
 function pad(value: number) {
@@ -64,7 +73,18 @@ function parseDateKey(dateKey: string) {
   return new Date(year, month - 1, day);
 }
 
-export function getDateOptions(days = 14): DateOption[] {
+function toDateOption(date: Date, todayKey: string): DateOption {
+  return {
+    value: toDateKey(date),
+    weekday: KOREAN_WEEKDAYS[date.getDay()],
+    day: String(date.getDate()),
+    month: `${date.getMonth() + 1}월`,
+    year: String(date.getFullYear()),
+    isToday: toDateKey(date) === todayKey
+  };
+}
+
+export function getDateOptions(days = RESERVATION_FUTURE_DAYS): DateOption[] {
   const today = getSeoulToday();
   const todayKey = toDateKey(today);
 
@@ -73,14 +93,55 @@ export function getDateOptions(days = 14): DateOption[] {
     date.setHours(0, 0, 0, 0);
     date.setDate(today.getDate() + index);
 
-    return {
-      value: toDateKey(date),
-      weekday: KOREAN_WEEKDAYS[date.getDay()],
-      day: String(date.getDate()),
-      month: `${date.getMonth() + 1}월`,
-      isToday: toDateKey(date) === todayKey
-    };
+    return toDateOption(date, todayKey);
   });
+}
+
+export function getReservationRange() {
+  const startDate = parseDateKey(RESERVATION_HISTORY_START_DATE);
+  const endDate = getSeoulToday();
+  endDate.setDate(endDate.getDate() + RESERVATION_FUTURE_DAYS);
+
+  return {
+    startDate,
+    endDate,
+    startKey: toDateKey(startDate),
+    endKey: toDateKey(endDate)
+  };
+}
+
+export function getReservationDateOptions(): DateOption[] {
+  const { startDate, endDate } = getReservationRange();
+  const todayKey = getSeoulTodayKey();
+  const dates: DateOption[] = [];
+  const cursor = new Date(startDate);
+
+  while (cursor <= endDate) {
+    dates.push(toDateOption(cursor, todayKey));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return dates;
+}
+
+export function getReservationMonthOptions(dateOptions: DateOption[]) {
+  return dateOptions.reduce<MonthOption[]>((months, date) => {
+    const key = date.value.slice(0, 7);
+    const current = months[months.length - 1];
+
+    if (current?.key === key) {
+      current.dates.push(date);
+      return months;
+    }
+
+    months.push({
+      key,
+      label: `${date.year}년 ${date.month}`,
+      dates: [date]
+    });
+
+    return months;
+  }, []);
 }
 
 export function formatHour(hour: number) {

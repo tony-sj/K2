@@ -4,7 +4,7 @@ import {
   isAdminEmail,
   isAllowedSchoolEmail
 } from "@/lib/auth";
-import { getSeoulToday, toDateKey } from "@/lib/date";
+import { getReservationRange } from "@/lib/date";
 import { hasSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import type { Facility, Reservation } from "@/lib/database.types";
@@ -51,9 +51,7 @@ export default async function HomePage() {
     );
   }
 
-  const today = getSeoulToday();
-  const endDate = new Date(today);
-  endDate.setDate(today.getDate() + 13);
+  const { startKey, endKey } = getReservationRange();
 
   const [{ data: facilities }, { data: reservations }] = await Promise.all([
     supabase.from("facilities").select("id,name").order("id", { ascending: true }),
@@ -62,8 +60,8 @@ export default async function HomePage() {
       .select(
         "id,user_id,facility_id,reservation_date,start_time,end_time,reserved_by_name,created_at"
       )
-      .gte("reservation_date", toDateKey(today))
-      .lte("reservation_date", toDateKey(endDate))
+      .gte("reservation_date", startKey)
+      .lte("reservation_date", endKey)
       .order("reservation_date", { ascending: true })
       .order("start_time", { ascending: true })
   ]);

@@ -1,21 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   CalendarDays,
   Check,
   ChevronDown,
   Clock3,
+  Grid3X3,
   Layers3,
   MapPin,
   UserSquare2,
   X
 } from "lucide-react";
-import { createReservation } from "@/app/actions";
+import { cancelReservation, createReservation } from "@/app/actions";
 import { AdminFacilityManager } from "@/components/admin-facility-manager";
 import { LogoutButton } from "@/components/logout-button";
-import { canReserveReservation, formatHour, getDateOptions } from "@/lib/date";
+import {
+  canReserveReservation,
+  formatHour,
+  getReservationDateOptions,
+  getReservationMonthOptions,
+  getSeoulTodayKey
+} from "@/lib/date";
 import type { Facility, Reservation } from "@/lib/database.types";
 import { createClient } from "@/lib/supabase/client";
 
@@ -79,15 +86,22 @@ export function ReservationApp({
   facilities,
   initialReservations
 }: ReservationAppProps) {
-  const dates = useMemo(() => getDateOptions(14), []);
+  const dates = useMemo(() => getReservationDateOptions(), []);
+  const monthOptions = useMemo(() => getReservationMonthOptions(dates), [dates]);
+  const todayKey = useMemo(() => getSeoulTodayKey(), []);
+  const todayIndex = dates.findIndex((date) => date.value === todayKey);
   const [facilityList, setFacilityList] = useState(facilities);
   const [selectedFacilityId, setSelectedFacilityId] = useState(facilities[0]?.id);
-  const [selectedDate, setSelectedDate] = useState(dates[0]?.value);
+  const [selectedDate, setSelectedDate] = useState(
+    dates[todayIndex >= 0 ? todayIndex : 0]?.value
+  );
   const [reservations, setReservations] = useState(initialReservations);
   const [draftStart, setDraftStart] = useState<number | null>(null);
   const [selectedRange, setSelectedRange] = useState<ReservationRange | null>(null);
   const [notice, setNotice] = useState("");
   const [isFacilitySheetOpen, setIsFacilitySheetOpen] = useState(false);
+  const [isCalendarSheetOpen, setIsCalendarSheetOpen] = useState(false);
+  const todayButtonRef = useRef<HTMLButtonElement | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const selectedReservations = useMemo(() => {
@@ -170,6 +184,14 @@ export function ReservationApp({
     };
   }, [refreshFacilities, refreshReservations]);
 
+  useEffect(() => {
+    todayButtonRef.current?.scrollIntoView({
+      behavior: "instant",
+      block: "nearest",
+      inline: "center"
+    });
+  }, []);
+
   const resetSelection = () => {
     setDraftStart(null);
     setSelectedRange(null);
@@ -183,6 +205,7 @@ export function ReservationApp({
 
   const handleDateChange = (date: string) => {
     setSelectedDate(date);
+    setIsCalendarSheetOpen(false);
     resetSelection();
   };
 
@@ -257,6 +280,20 @@ export function ReservationApp({
     });
   };
 
+  const handleCancelReservation = (reservationId: string) => {
+    startTransition(async () => {
+      const result = await cancelReservation({ reservationId });
+      setNotice(result.message);
+
+      if (!result.ok) {
+        window.alert(result.message);
+        return;
+      }
+
+      await refreshReservations();
+    });
+  };
+
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col bg-white">
       <header className="border-b border-zinc-100 px-5 pb-4 pt-5">
@@ -321,9 +358,19 @@ export function ReservationApp({
       ) : null}
 
       <section className="border-b border-zinc-100 px-5 py-4">
-        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-800">
-          <CalendarDays aria-hidden="true" className="h-4 w-4 text-teal-700" />
-          날짜
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-zinc-800">
+            <CalendarDays aria-hidden="true" className="h-4 w-4 text-teal-700" />
+            날짜
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsCalendarSheetOpen(true)}
+            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-full border border-zinc-200 px-3 text-xs font-semibold text-zinc-700"
+          >
+            <Grid3X3 aria-hidden="true" className="h-3.5 w-3.5" />
+            달력
+          </button>
         </div>
         <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
           {dates.map((date) => {
@@ -332,6 +379,7 @@ export function ReservationApp({
             return (
               <button
                 key={date.value}
+                ref={date.isToday ? todayButtonRef : undefined}
                 type="button"
                 onClick={() => handleDateChange(date.value)}
                 className={[
@@ -398,30 +446,29 @@ export function ReservationApp({
                   : `${reservationForHour?.reserved_by_name} 예약`
                 : isPastSlot
                   ? "지난 시간"
-                  : isDraftStart
-                    ? "시작 시간 선택됨"
+                : isDraftStart
+                    ? "종료 시간을 선택하세요"
                     : isInRange
-                      ? "연속 시간 선택됨"
+                      ? "연속 시간"
                       : "";
+              const canCancelMine =
+                isMine &&
+                reservationForHour !== undefined &&
+                canReserveReservation(
+                  reservationForHour.reservation_date,
+                  reservationForHour.start_time
+                );
+              const rowClassName = [
+                "flex min-h-[62px] w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition",
+                isReserved || isPastSlot
+                  ? "border-zinc-200 bg-zinc-100 text-zinc-500"
+                  : isInRange || isDraftStart
+                    ? "border-teal-700 bg-teal-50 text-teal-950 active:scale-[0.99]"
+                    : "border-zinc-200 bg-white text-zinc-900 hover:border-zinc-300 hover:bg-zinc-50 active:scale-[0.99]"
+              ].join(" ");
 
-              return (
-                <button
-                  key={hour}
-                  type="button"
-                  disabled={isReserved || isPastSlot || !selectedFacility}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleHourClick(hour);
-                  }}
-                  className={[
-                    "flex min-h-[62px] w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition active:scale-[0.99] disabled:active:scale-100",
-                    isReserved || isPastSlot
-                      ? "border-zinc-200 bg-zinc-100 text-zinc-500"
-                      : isInRange || isDraftStart
-                        ? "border-teal-700 bg-teal-50 text-teal-950"
-                        : "border-zinc-200 bg-white text-zinc-900 hover:border-zinc-300 hover:bg-zinc-50"
-                  ].join(" ")}
-                >
+              const slotContent = (
+                <>
                   <div className="min-w-0">
                     <p className="text-[15px] font-bold">
                       {formatHour(hour)} - {formatHour(hour + 1)}
@@ -437,6 +484,44 @@ export function ReservationApp({
                       {isDraftStart ? "시작" : "선택됨"}
                     </span>
                   ) : null}
+                </>
+              );
+
+              if (isReserved) {
+                return (
+                  <div key={hour} className={rowClassName}>
+                    {slotContent}
+                    {canCancelMine ? (
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleCancelReservation(reservationForHour.id);
+                        }}
+                        className="ml-3 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 disabled:text-zinc-300"
+                        title="예약 취소"
+                      >
+                        <X aria-hidden="true" className="h-4 w-4" />
+                        <span className="sr-only">예약 취소</span>
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              }
+
+              return (
+                <button
+                  key={hour}
+                  type="button"
+                  disabled={isReserved || isPastSlot || !selectedFacility}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleHourClick(hour);
+                  }}
+                  className={`${rowClassName} disabled:active:scale-100`}
+                >
+                  {slotContent}
                 </button>
               );
             })}
@@ -521,6 +606,83 @@ export function ReservationApp({
                         {isSelected ? "선택됨" : "선택"}
                       </span>
                     </button>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        </>
+      ) : null}
+
+      {isCalendarSheetOpen ? (
+        <>
+          <button
+            type="button"
+            aria-label="날짜 선택 닫기"
+            onClick={() => setIsCalendarSheetOpen(false)}
+            className="fixed inset-0 z-40 bg-black/30"
+          />
+          <section className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-[480px] rounded-t-[24px] bg-white px-5 pb-6 pt-5 shadow-soft">
+            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-zinc-200" />
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[13px] font-medium text-teal-700">날짜 선택</p>
+                <h2 className="mt-1 text-lg font-bold text-zinc-950">
+                  예약 현황을 볼 날짜
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCalendarSheetOpen(false)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 text-zinc-600"
+              >
+                <X aria-hidden="true" className="h-4 w-4" />
+                <span className="sr-only">닫기</span>
+              </button>
+            </div>
+
+            <div className="no-scrollbar max-h-[62vh] overflow-y-auto">
+              <div className="space-y-6">
+                {monthOptions.map((month) => {
+                  const leadingBlankCount = new Date(`${month.key}-01`).getDay();
+
+                  return (
+                    <section key={month.key}>
+                      <h3 className="mb-3 text-sm font-bold text-zinc-900">
+                        {month.label}
+                      </h3>
+                      <div className="mb-2 grid grid-cols-7 text-center text-[11px] font-semibold text-zinc-400">
+                        {["일", "월", "화", "수", "목", "금", "토"].map((weekday) => (
+                          <span key={weekday}>{weekday}</span>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-7 gap-1.5">
+                        {Array.from({ length: leadingBlankCount }, (_, index) => (
+                          <span key={`blank-${month.key}-${index}`} className="h-10" />
+                        ))}
+                        {month.dates.map((date) => {
+                          const isSelected = date.value === selectedDate;
+
+                          return (
+                            <button
+                              key={date.value}
+                              type="button"
+                              onClick={() => handleDateChange(date.value)}
+                              className={[
+                                "h-10 rounded-lg text-sm font-semibold",
+                                isSelected
+                                  ? "bg-zinc-950 text-white"
+                                  : date.isToday
+                                    ? "bg-teal-50 text-teal-800"
+                                    : "text-zinc-700 hover:bg-zinc-100"
+                              ].join(" ")}
+                            >
+                              {date.day}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </section>
                   );
                 })}
               </div>
