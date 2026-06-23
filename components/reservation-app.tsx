@@ -371,7 +371,14 @@ export function ReservationApp({
           </p>
         ) : null}
 
-        <div className="no-scrollbar min-h-[260px] flex-1 overflow-y-auto pb-28">
+        <div
+          className="no-scrollbar min-h-[260px] flex-1 overflow-y-auto pb-28"
+          onClick={() => {
+            if (draftStart !== null || selectedRange !== null) {
+              resetSelection();
+            }
+          }}
+        >
           <div className="space-y-2">
             {HOURS.map((hour) => {
               const reservationForHour = getReservationForHour(selectedReservations, hour);
@@ -385,13 +392,27 @@ export function ReservationApp({
                 selectedRange !== null &&
                 hour >= selectedRange.start &&
                 hour < selectedRange.end;
+              const helperText = isReserved
+                ? isMine
+                  ? `${reservationForHour?.reserved_by_name} · 내 예약`
+                  : `${reservationForHour?.reserved_by_name} 예약`
+                : isPastSlot
+                  ? "지난 시간"
+                  : isDraftStart
+                    ? "시작 시간 선택됨"
+                    : isInRange
+                      ? "연속 시간 선택됨"
+                      : "";
 
               return (
                 <button
                   key={hour}
                   type="button"
                   disabled={isReserved || isPastSlot || !selectedFacility}
-                  onClick={() => handleHourClick(hour)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleHourClick(hour);
+                  }}
                   className={[
                     "flex min-h-[62px] w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition active:scale-[0.99] disabled:active:scale-100",
                     isReserved || isPastSlot
@@ -405,31 +426,17 @@ export function ReservationApp({
                     <p className="text-[15px] font-bold">
                       {formatHour(hour)} - {formatHour(hour + 1)}
                     </p>
-                    <p className="mt-1 truncate text-[12px] font-medium">
-                      {isReserved
-                        ? isMine
-                          ? `${reservationForHour?.reserved_by_name} · 내 예약`
-                          : `${reservationForHour?.reserved_by_name} 예약`
-                        : isPastSlot
-                          ? "지난 시간"
-                        : isDraftStart
-                          ? "시작 시간 선택됨"
-                          : isInRange
-                            ? "연속 시간 선택됨"
-                            : "예약 가능"}
-                    </p>
+                    {helperText ? (
+                      <p className="mt-1 truncate text-[12px] font-medium">
+                        {helperText}
+                      </p>
+                    ) : null}
                   </div>
-                  <span className="ml-3 shrink-0 text-xs font-semibold">
-                    {isReserved
-                      ? "예약됨"
-                      : isPastSlot
-                        ? "불가"
-                      : isDraftStart
-                        ? "시작"
-                        : isInRange
-                          ? "선택됨"
-                          : "가능"}
-                  </span>
+                  {isDraftStart || isInRange ? (
+                    <span className="ml-3 shrink-0 text-xs font-semibold">
+                      {isDraftStart ? "시작" : "선택됨"}
+                    </span>
+                  ) : null}
                 </button>
               );
             })}
