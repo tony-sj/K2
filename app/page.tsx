@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
-import { getUserDisplayName, isAllowedSchoolEmail } from "@/lib/auth";
-import { toDateKey } from "@/lib/date";
+import {
+  getUserDisplayName,
+  isAdminEmail,
+  isAllowedSchoolEmail
+} from "@/lib/auth";
+import { getSeoulToday, toDateKey } from "@/lib/date";
 import { hasSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import type { Facility, Reservation } from "@/lib/database.types";
@@ -28,6 +32,7 @@ export default async function HomePage() {
   }
 
   const fallbackName = getUserDisplayName(user);
+  const isAdmin = isAdminEmail(user.email);
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -46,7 +51,7 @@ export default async function HomePage() {
     );
   }
 
-  const today = new Date();
+  const today = getSeoulToday();
   const endDate = new Date(today);
   endDate.setDate(today.getDate() + 13);
 
@@ -54,7 +59,9 @@ export default async function HomePage() {
     supabase.from("facilities").select("id,name").order("id", { ascending: true }),
     supabase
       .from("reservations")
-      .select("id,user_id,facility_id,reservation_date,start_time,end_time,created_at")
+      .select(
+        "id,user_id,facility_id,reservation_date,start_time,end_time,reserved_by_name,created_at"
+      )
       .gte("reservation_date", toDateKey(today))
       .lte("reservation_date", toDateKey(endDate))
       .order("reservation_date", { ascending: true })
@@ -63,6 +70,8 @@ export default async function HomePage() {
 
   return (
     <ReservationApp
+      currentUserId={user.id}
+      isAdmin={isAdmin}
       userName={profile?.name ?? fallbackName}
       facilities={(facilities ?? []) as Facility[]}
       initialReservations={(reservations ?? []) as Reservation[]}

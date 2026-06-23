@@ -53,6 +53,7 @@ export type Database = {
           reservation_date: string;
           start_time: number;
           end_time: number;
+          reserved_by_name: string;
           created_at: string;
         };
         Insert: {
@@ -62,6 +63,7 @@ export type Database = {
           reservation_date: string;
           start_time: number;
           end_time: number;
+          reserved_by_name: string;
           created_at?: string;
         };
         Update: {
@@ -71,6 +73,7 @@ export type Database = {
           reservation_date?: string;
           start_time?: number;
           end_time?: number;
+          reserved_by_name?: string;
           created_at?: string;
         };
         Relationships: [
@@ -96,6 +99,14 @@ export type Database = {
       enforce_med_kku_email_domain: {
         Args: { event: Json };
         Returns: Json;
+      };
+      can_cancel_reservation: {
+        Args: { target_date: string; target_start_time: number };
+        Returns: boolean;
+      };
+      is_admin_user: {
+        Args: Record<PropertyKey, never>;
+        Returns: boolean;
       };
       is_med_kku_user: {
         Args: Record<PropertyKey, never>;

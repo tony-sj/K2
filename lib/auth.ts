@@ -1,9 +1,14 @@
 import type { User } from "@supabase/supabase-js";
 
 export const SCHOOL_EMAIL_DOMAIN = "@med.kku.ac.kr";
+export const ADMIN_EMAIL = "dev@med.kku.ac.kr";
 
 export function isAllowedSchoolEmail(email?: string | null) {
   return email?.trim().toLowerCase().endsWith(SCHOOL_EMAIL_DOMAIN) ?? false;
+}
+
+export function isAdminEmail(email?: string | null) {
+  return email?.trim().toLowerCase() === ADMIN_EMAIL;
 }
 
 export function getUserDisplayName(user: User) {

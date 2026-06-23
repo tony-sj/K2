@@ -18,10 +18,11 @@ create table if not exists public.facilities (
 create table if not exists public.reservations (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,
-  facility_id integer not null references public.facilities(id) on delete cascade,
+  facility_id integer not null references public.facilities(id) on delete restrict,
   reservation_date date not null,
   start_time integer not null,
   end_time integer not null,
+  reserved_by_name text not null default '',
   created_at timestamptz not null default now(),
   constraint reservations_start_time_check check (start_time between 0 and 23),
   constraint reservations_end_time_check check (end_time between 1 and 24),
@@ -33,6 +34,22 @@ create table if not exists public.reservations (
       int4range(start_time, end_time, '[)') with &&
     )
 );
+
+alter table public.reservations
+  add column if not exists reserved_by_name text not null default '';
+
+alter table public.reservations
+  drop constraint if exists reservations_facility_id_fkey;
+
+alter table public.reservations
+  add constraint reservations_facility_id_fkey
+  foreign key (facility_id) references public.facilities(id) on delete restrict;
+
+update public.reservations
+set reserved_by_name = public.profiles.name
+from public.profiles
+where public.reservations.user_id = public.profiles.id
+  and coalesce(public.reservations.reserved_by_name, '') = '';
 
 insert into public.facilities (name)
 values
@@ -55,6 +72,30 @@ language sql
 stable
 as $$
   select right(lower(coalesce(auth.jwt() ->> 'email', '')), length('@med.kku.ac.kr')) = '@med.kku.ac.kr';
+$$;
+
+create or replace function public.is_admin_user()
+returns boolean
+language sql
+stable
+as $$
+  select lower(coalesce(auth.jwt() ->> 'email', '')) = 'dev@med.kku.ac.kr';
+$$;
+
+create or replace function public.can_cancel_reservation(target_date date, target_start_time integer)
+returns boolean
+language sql
+stable
+as $$
+  with now_seoul as (
+    select now() at time zone 'Asia/Seoul' as ts
+  )
+  select
+    target_date > (select ts::date from now_seoul)
+    or (
+      target_date = (select ts::date from now_seoul)
+      and make_time(target_start_time, 0, 0) > (select ts::time from now_seoul)
+    );
 $$;
 
 alter table public.profiles enable row level security;
@@ -86,6 +127,18 @@ on public.facilities for select
 to authenticated
 using (public.is_med_kku_user());
 
+drop policy if exists "Facilities can be inserted by admin" on public.facilities;
+create policy "Facilities can be inserted by admin"
+on public.facilities for insert
+to authenticated
+with check (public.is_admin_user());
+
+drop policy if exists "Facilities can be deleted by admin" on public.facilities;
+create policy "Facilities can be deleted by admin"
+on public.facilities for delete
+to authenticated
+using (public.is_admin_user());
+
 drop policy if exists "Reservations are readable by school users" on public.reservations;
 create policy "Reservations are readable by school users"
 on public.reservations for select
@@ -102,11 +155,16 @@ drop policy if exists "Reservations can be deleted by owner" on public.reservati
 create policy "Reservations can be deleted by owner"
 on public.reservations for delete
 to authenticated
-using (auth.uid() = user_id and public.is_med_kku_user());
+using (
+  auth.uid() = user_id
+  and public.is_med_kku_user()
+  and public.can_cancel_reservation(reservation_date, start_time)
+);
 
 do $$
 begin
   alter publication supabase_realtime add table public.reservations;
+  alter publication supabase_realtime add table public.facilities;
 exception
   when duplicate_object then null;
   when undefined_object then null;

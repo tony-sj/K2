@@ -1,4 +1,5 @@
 const KOREAN_WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+const SEOUL_TIME_ZONE = "Asia/Seoul";
 
 export type DateOption = {
   value: string;
@@ -12,12 +13,59 @@ function pad(value: number) {
   return String(value).padStart(2, "0");
 }
 
+type ZonedDateParts = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+};
+
+function getZonedDateParts(date: Date, timeZone = SEOUL_TIME_ZONE): ZonedDateParts {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  });
+
+  const parts = formatter.formatToParts(date);
+  const getPart = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value ?? "0");
+
+  return {
+    year: getPart("year"),
+    month: getPart("month"),
+    day: getPart("day"),
+    hour: getPart("hour"),
+    minute: getPart("minute")
+  };
+}
+
 export function toDateKey(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+export function getSeoulToday() {
+  const { year, month, day } = getZonedDateParts(new Date());
+  return new Date(year, month - 1, day);
+}
+
+export function getSeoulTodayKey() {
+  const { year, month, day } = getZonedDateParts(new Date());
+  return `${year}-${pad(month)}-${pad(day)}`;
+}
+
+function parseDateKey(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
 export function getDateOptions(days = 14): DateOption[] {
-  const today = new Date();
+  const today = getSeoulToday();
   const todayKey = toDateKey(today);
 
   return Array.from({ length: days }, (_, index) => {
@@ -37,4 +85,51 @@ export function getDateOptions(days = 14): DateOption[] {
 
 export function formatHour(hour: number) {
   return `${pad(hour)}:00`;
+}
+
+export function formatDateKey(dateKey: string) {
+  const date = parseDateKey(dateKey);
+  return `${date.getMonth() + 1}월 ${date.getDate()}일 (${KOREAN_WEEKDAYS[date.getDay()]})`;
+}
+
+export function canCancelReservation(reservationDate: string, startTime: number) {
+  const now = getZonedDateParts(new Date());
+  const todayKey = `${now.year}-${pad(now.month)}-${pad(now.day)}`;
+
+  if (reservationDate > todayKey) {
+    return true;
+  }
+
+  if (reservationDate < todayKey) {
+    return false;
+  }
+
+  return startTime > now.hour;
+}
+
+export function getReservationStatus(
+  reservationDate: string,
+  startTime: number,
+  endTime: number
+) {
+  const now = getZonedDateParts(new Date());
+  const todayKey = `${now.year}-${pad(now.month)}-${pad(now.day)}`;
+
+  if (reservationDate > todayKey) {
+    return "upcoming" as const;
+  }
+
+  if (reservationDate < todayKey) {
+    return "past" as const;
+  }
+
+  if (now.hour < startTime) {
+    return "upcoming" as const;
+  }
+
+  if (now.hour >= endTime) {
+    return "past" as const;
+  }
+
+  return "ongoing" as const;
 }
