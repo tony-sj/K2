@@ -172,6 +172,16 @@ export function canReserveReservation(reservationDate: string, startTime: number
   return canCancelReservation(reservationDate, startTime);
 }
 
+export function getNearestReservableHour(reservationDate: string) {
+  for (let hour = 0; hour < 24; hour += 1) {
+    if (canReserveReservation(reservationDate, hour)) {
+      return hour;
+    }
+  }
+
+  return 23;
+}
+
 export function getReservationStatus(
   reservationDate: string,
   startTime: number,

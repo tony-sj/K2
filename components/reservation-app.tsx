@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import Link from "next/link";
 import {
+  Ban,
   CalendarDays,
   Check,
   ChevronDown,
@@ -18,9 +18,12 @@ import { AdminFacilityManager } from "@/components/admin-facility-manager";
 import { LogoutButton } from "@/components/logout-button";
 import {
   canReserveReservation,
+  formatDateKey,
   formatHour,
+  getNearestReservableHour,
   getReservationDateOptions,
   getReservationMonthOptions,
+  getReservationStatus,
   getSeoulTodayKey
 } from "@/lib/date";
 import type { Facility, Reservation } from "@/lib/database.types";
@@ -101,7 +104,10 @@ export function ReservationApp({
   const [notice, setNotice] = useState("");
   const [isFacilitySheetOpen, setIsFacilitySheetOpen] = useState(false);
   const [isCalendarSheetOpen, setIsCalendarSheetOpen] = useState(false);
+  const [isMyReservationsOpen, setIsMyReservationsOpen] = useState(false);
   const todayButtonRef = useRef<HTMLButtonElement | null>(null);
+  const dateButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const hourSlotRefs = useRef(new Map<number, HTMLElement>());
   const [isPending, startTransition] = useTransition();
 
   const selectedReservations = useMemo(() => {
@@ -120,6 +126,24 @@ export function ReservationApp({
   const selectedFacility = facilityList.find(
     (facility) => facility.id === selectedFacilityId
   );
+
+  const myReservations = useMemo(() => {
+    return reservations
+      .filter((reservation) => reservation.user_id === currentUserId)
+      .map((reservation) => ({
+        ...reservation,
+        facilityName:
+          facilityList.find((facility) => facility.id === reservation.facility_id)
+            ?.name ?? "시설"
+      }))
+      .sort((first, second) => {
+        if (first.reservation_date !== second.reservation_date) {
+          return first.reservation_date.localeCompare(second.reservation_date);
+        }
+
+        return first.start_time - second.start_time;
+      });
+  }, [currentUserId, facilityList, reservations]);
 
   const refreshFacilities = useCallback(async () => {
     const supabase = createClient();
@@ -191,6 +215,26 @@ export function ReservationApp({
       inline: "center"
     });
   }, []);
+
+  useEffect(() => {
+    if (!selectedDate) {
+      return;
+    }
+
+    dateButtonRefs.current.get(selectedDate)?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center"
+    });
+
+    const targetHour = getNearestReservableHour(selectedDate);
+    window.setTimeout(() => {
+      hourSlotRefs.current.get(targetHour)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    }, 0);
+  }, [selectedDate]);
 
   const resetSelection = () => {
     setDraftStart(null);
@@ -308,13 +352,14 @@ export function ReservationApp({
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-2">
-          <Link
-            href="/my-reservations"
+          <button
+            type="button"
+            onClick={() => setIsMyReservationsOpen(true)}
             className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-zinc-200 text-sm font-semibold text-zinc-900"
           >
             <UserSquare2 aria-hidden="true" className="h-4 w-4" />
             나의 예약
-          </Link>
+          </button>
           <button
             type="button"
             onClick={() => setIsFacilitySheetOpen(true)}
@@ -379,7 +424,17 @@ export function ReservationApp({
             return (
               <button
                 key={date.value}
-                ref={date.isToday ? todayButtonRef : undefined}
+                ref={(node) => {
+                  if (node) {
+                    dateButtonRefs.current.set(date.value, node);
+                  } else {
+                    dateButtonRefs.current.delete(date.value);
+                  }
+
+                  if (date.isToday) {
+                    todayButtonRef.current = node;
+                  }
+                }}
                 type="button"
                 onClick={() => handleDateChange(date.value)}
                 className={[
@@ -420,7 +475,7 @@ export function ReservationApp({
         ) : null}
 
         <div
-          className="no-scrollbar min-h-[260px] flex-1 overflow-y-auto pb-28"
+          className="no-scrollbar h-[min(48dvh,420px)] min-h-[260px] overflow-y-auto pb-28"
           onClick={() => {
             if (draftStart !== null || selectedRange !== null) {
               resetSelection();
@@ -489,7 +544,17 @@ export function ReservationApp({
 
               if (isReserved) {
                 return (
-                  <div key={hour} className={rowClassName}>
+                  <div
+                    key={hour}
+                    ref={(node) => {
+                      if (node) {
+                        hourSlotRefs.current.set(hour, node);
+                      } else {
+                        hourSlotRefs.current.delete(hour);
+                      }
+                    }}
+                    className={rowClassName}
+                  >
                     {slotContent}
                     {canCancelMine ? (
                       <button
@@ -513,6 +578,13 @@ export function ReservationApp({
               return (
                 <button
                   key={hour}
+                  ref={(node) => {
+                    if (node) {
+                      hourSlotRefs.current.set(hour, node);
+                    } else {
+                      hourSlotRefs.current.delete(hour);
+                    }
+                  }}
                   type="button"
                   disabled={isReserved || isPastSlot || !selectedFacility}
                   onClick={(event) => {
@@ -683,6 +755,98 @@ export function ReservationApp({
                         })}
                       </div>
                     </section>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        </>
+      ) : null}
+
+      {isMyReservationsOpen ? (
+        <>
+          <button
+            type="button"
+            aria-label="나의 예약 닫기"
+            onClick={() => setIsMyReservationsOpen(false)}
+            className="fixed inset-0 z-40 bg-black/30"
+          />
+          <section className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-[480px] rounded-t-[24px] bg-white px-5 pb-6 pt-5 shadow-soft">
+            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-zinc-200" />
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[13px] font-medium text-teal-700">나의 예약</p>
+                <h2 className="mt-1 text-lg font-bold text-zinc-950">
+                  예약 내역
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMyReservationsOpen(false)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 text-zinc-600"
+              >
+                <X aria-hidden="true" className="h-4 w-4" />
+                <span className="sr-only">닫기</span>
+              </button>
+            </div>
+
+            <div className="no-scrollbar max-h-[62vh] overflow-y-auto">
+              <div className="space-y-3">
+                {myReservations.length === 0 ? (
+                  <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-5 text-sm text-zinc-600">
+                    아직 예약한 내역이 없습니다.
+                  </div>
+                ) : null}
+
+                {myReservations.map((reservation) => {
+                  const status = getReservationStatus(
+                    reservation.reservation_date,
+                    reservation.start_time,
+                    reservation.end_time
+                  );
+                  const canCancel = canReserveReservation(
+                    reservation.reservation_date,
+                    reservation.start_time
+                  );
+
+                  return (
+                    <article
+                      key={reservation.id}
+                      className="rounded-lg border border-zinc-200 px-4 py-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h3 className="truncate text-base font-semibold text-zinc-950">
+                            {reservation.facilityName}
+                          </h3>
+                          <p className="mt-2 text-sm font-medium text-zinc-600">
+                            {formatDateKey(reservation.reservation_date)}
+                          </p>
+                          <p className="mt-1 text-sm text-zinc-600">
+                            {formatHour(reservation.start_time)} -{" "}
+                            {formatHour(reservation.end_time)}
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-600">
+                          {status === "upcoming"
+                            ? "예정"
+                            : status === "ongoing"
+                              ? "진행 중"
+                              : "지난 예약"}
+                        </span>
+                      </div>
+                      <div className="mt-4 flex justify-end">
+                        <button
+                          type="button"
+                          disabled={!canCancel || isPending}
+                          onClick={() => handleCancelReservation(reservation.id)}
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-zinc-200 px-3 text-sm font-semibold text-zinc-800 disabled:bg-zinc-100 disabled:text-zinc-400"
+                        >
+                          <Ban aria-hidden="true" className="h-4 w-4" />
+                          취소
+                        </button>
+                      </div>
+                    </article>
                   );
                 })}
               </div>
