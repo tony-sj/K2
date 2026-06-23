@@ -107,6 +107,7 @@ export function ReservationApp({
   const todayButtonRef = useRef<HTMLButtonElement | null>(null);
   const dateButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const hourSlotRefs = useRef(new Map<number, HTMLElement>());
+  const calendarMonthRefs = useRef(new Map<string, HTMLElement>());
   const [isPending, startTransition] = useTransition();
 
   const selectedReservations = useMemo(() => {
@@ -209,7 +210,7 @@ export function ReservationApp({
 
   useEffect(() => {
     todayButtonRef.current?.scrollIntoView({
-      behavior: "instant",
+      behavior: "smooth",
       block: "nearest",
       inline: "center"
     });
@@ -221,7 +222,7 @@ export function ReservationApp({
     }
 
     dateButtonRefs.current.get(selectedDate)?.scrollIntoView({
-      behavior: "auto",
+      behavior: "smooth",
       block: "nearest",
       inline: "center"
     });
@@ -229,11 +230,24 @@ export function ReservationApp({
     const targetHour = getNearestReservableHour(selectedDate);
     window.setTimeout(() => {
       hourSlotRefs.current.get(targetHour)?.scrollIntoView({
-        behavior: "auto",
+        behavior: "smooth",
         block: "start"
       });
     }, 0);
   }, [selectedDate]);
+
+  useEffect(() => {
+    if (!isCalendarSheetOpen || !selectedDate) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      calendarMonthRefs.current.get(selectedDate.slice(0, 7))?.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    }, 0);
+  }, [isCalendarSheetOpen, selectedDate]);
 
   const resetSelection = () => {
     setDraftStart(null);
@@ -710,7 +724,16 @@ export function ReservationApp({
                   const leadingBlankCount = new Date(`${month.key}-01`).getDay();
 
                   return (
-                    <section key={month.key}>
+                    <section
+                      key={month.key}
+                      ref={(node) => {
+                        if (node) {
+                          calendarMonthRefs.current.set(month.key, node);
+                        } else {
+                          calendarMonthRefs.current.delete(month.key);
+                        }
+                      }}
+                    >
                       <h3 className="mb-3 text-sm font-bold text-zinc-900">
                         {month.label}
                       </h3>
