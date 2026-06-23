@@ -7,6 +7,7 @@ import { SetupNotice } from "@/components/setup-notice";
 
 type LoginPageProps = {
   searchParams?: Promise<{
+    detail?: string;
     error?: string;
   }>;
 };
@@ -14,6 +15,9 @@ type LoginPageProps = {
 const ERROR_MESSAGES: Record<string, string> = {
   auth: "로그인 처리 중 문제가 발생했습니다.",
   domain: "@med.kku.ac.kr 계정만 사용할 수 있습니다.",
+  exchange: "로그인 세션을 만드는 중 문제가 발생했습니다.",
+  missing_code: "인증 코드가 돌아오지 않았습니다. Supabase Redirect URL 설정을 확인해 주세요.",
+  oauth: "Google OAuth 인증이 완료되지 않았습니다.",
   profile: "프로필 동기화에 실패했습니다."
 };
 
@@ -39,6 +43,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   }
 
   const errorMessage = params?.error ? ERROR_MESSAGES[params.error] : undefined;
+  const errorDetail = params?.detail;
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col bg-white px-5">
@@ -52,9 +57,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </p>
 
         {errorMessage ? (
-          <p className="mt-8 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">
-            {errorMessage}
-          </p>
+          <div className="mt-8 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <p className="font-semibold">{errorMessage}</p>
+            {errorDetail ? (
+              <p className="mt-2 break-words text-xs leading-5 text-amber-900">
+                {errorDetail}
+              </p>
+            ) : null}
+          </div>
         ) : null}
 
         <div className="mt-8">

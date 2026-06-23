@@ -8,14 +8,22 @@ export function isAllowedSchoolEmail(email?: string | null) {
 
 export function getUserDisplayName(user: User) {
   const metadata = user.user_metadata as {
+    family_name?: string;
     full_name?: string;
+    given_name?: string;
     name?: string;
     preferred_username?: string;
   };
 
+  const familyGivenName = [metadata.family_name, metadata.given_name]
+    .filter(Boolean)
+    .join("")
+    .trim();
+
   return (
     metadata.full_name?.trim() ||
     metadata.name?.trim() ||
+    familyGivenName ||
     metadata.preferred_username?.trim() ||
     user.email?.split("@")[0] ||
     "사용자"
