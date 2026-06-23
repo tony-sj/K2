@@ -221,7 +221,7 @@ export function ReservationApp({
     }
 
     dateButtonRefs.current.get(selectedDate)?.scrollIntoView({
-      behavior: "smooth",
+      behavior: "auto",
       block: "nearest",
       inline: "center"
     });
@@ -229,7 +229,7 @@ export function ReservationApp({
     const targetHour = getNearestReservableHour(selectedDate);
     window.setTimeout(() => {
       hourSlotRefs.current.get(targetHour)?.scrollIntoView({
-        behavior: "smooth",
+        behavior: "auto",
         block: "start"
       });
     }, 0);
@@ -440,6 +440,18 @@ export function ReservationApp({
             })}
           </div>
         </section>
+
+        <section className="border-t border-zinc-100 px-5 py-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-[13px] font-semibold text-zinc-800">
+              <Clock3 aria-hidden="true" className="h-4 w-4 text-teal-700" />
+              시간
+            </div>
+            <p className="truncate text-xs font-medium text-zinc-500">
+              {selectedFacility?.name ?? "시설 미선택"} · {selectedDate}
+            </p>
+          </div>
+        </section>
       </div>
 
       {isAdmin ? (
@@ -447,16 +459,6 @@ export function ReservationApp({
       ) : null}
 
       <section className="px-5 py-4">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-zinc-800">
-            <Clock3 aria-hidden="true" className="h-4 w-4 text-teal-700" />
-            시간
-          </div>
-          <p className="truncate text-xs font-medium text-zinc-500">
-            {selectedFacility?.name ?? "시설 미선택"} · {selectedDate}
-          </p>
-        </div>
-
         {notice ? (
           <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-[13px] font-medium text-amber-950">
             {notice}
@@ -503,7 +505,7 @@ export function ReservationApp({
                   reservationForHour.start_time
                 );
               const rowClassName = [
-                "scroll-mt-[220px] flex min-h-[62px] w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition",
+                "scroll-mt-[260px] flex min-h-[62px] w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition",
                 isReserved || isPastSlot
                   ? "border-zinc-200 bg-zinc-100 text-zinc-500"
                   : isInRange || isDraftStart
