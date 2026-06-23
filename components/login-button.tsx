@@ -13,8 +13,7 @@ export function LoginButton() {
       options: {
         redirectTo: `${origin}/auth/callback`,
         queryParams: {
-          hd: "med.kku.ac.kr",
-          prompt: "select_account"
+          hd: "med.kku.ac.kr"
         }
       }
     });
