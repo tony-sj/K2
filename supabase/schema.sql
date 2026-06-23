@@ -104,6 +104,14 @@ on public.reservations for delete
 to authenticated
 using (auth.uid() = user_id and public.is_med_kku_user());
 
+do $$
+begin
+  alter publication supabase_realtime add table public.reservations;
+exception
+  when duplicate_object then null;
+  when undefined_object then null;
+end $$;
+
 create or replace function public.enforce_med_kku_email_domain(event jsonb)
 returns jsonb
 language plpgsql

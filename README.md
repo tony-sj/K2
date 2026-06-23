@@ -43,10 +43,11 @@ npm run dev
 ## Supabase Setup
 
 1. `supabase/schema.sql`을 Supabase SQL Editor에서 실행합니다.
-2. Authentication > Providers에서 Google Provider를 활성화합니다.
-3. Google OAuth redirect URL에 `https://<project-ref>.supabase.co/auth/v1/callback`을 등록합니다.
-4. Authentication > URL Configuration에 배포 도메인과 로컬 주소를 등록합니다.
-5. Authentication > Hooks에서 `Before User Created`를 켜고 아래 Postgres function URI를 연결합니다.
+2. Database > Replication에서 `public.reservations` Realtime 상태를 확인합니다.
+3. Authentication > Providers에서 Google Provider를 활성화합니다.
+4. Google OAuth redirect URL에 `https://<project-ref>.supabase.co/auth/v1/callback`을 등록합니다.
+5. Authentication > URL Configuration에 배포 도메인과 로컬 주소를 등록합니다.
+6. Authentication > Hooks에서 `Before User Created`를 켜고 아래 Postgres function URI를 연결합니다.
 
 ```txt
 pg-functions://postgres/public/enforce_med_kku_email_domain
