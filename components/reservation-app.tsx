@@ -126,10 +126,22 @@ export function ReservationApp({
 
   const visibleDates = useMemo(() => {
     const visibleCount = Math.min(7, dates.length);
-    const startIndex = Math.max(todayIndex, 0);
+    const defaultStartIndex = Math.max(todayIndex, 0);
+    const selectedIndex = dates.findIndex((date) => date.value === selectedDate);
+    const selectedIsInDefaultRange =
+      selectedIndex >= defaultStartIndex &&
+      selectedIndex < defaultStartIndex + visibleCount;
+    const maxStartIndex = Math.max(dates.length - visibleCount, 0);
+    const startIndex =
+      selectedIndex < 0 || selectedIsInDefaultRange
+        ? defaultStartIndex
+        : Math.min(
+            Math.max(selectedIndex - Math.floor(visibleCount / 2), 0),
+            maxStartIndex
+          );
 
     return dates.slice(startIndex, startIndex + visibleCount);
-  }, [dates, todayIndex]);
+  }, [dates, selectedDate, todayIndex]);
 
   const selectedReservations = useMemo(() => {
     return reservations.filter(
