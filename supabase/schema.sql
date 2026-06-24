@@ -35,6 +35,15 @@ create table if not exists public.reservations (
     )
 );
 
+create index if not exists reservations_date_start_idx
+  on public.reservations (reservation_date, start_time);
+
+create index if not exists reservations_facility_date_start_idx
+  on public.reservations (facility_id, reservation_date, start_time);
+
+create index if not exists reservations_user_date_start_idx
+  on public.reservations (user_id, reservation_date, start_time);
+
 alter table public.reservations
   add column if not exists reserved_by_name text not null default '';
 

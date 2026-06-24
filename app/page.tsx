@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import {
-  getUserDisplayName,
+  getClaimsDisplayName,
   isAdminEmail,
   isAllowedSchoolEmail
 } from "@/lib/auth";
-import { getReservationRange } from "@/lib/date";
+import { getReservationQueryRange } from "@/lib/date";
 import { hasSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import type { Facility, Reservation } from "@/lib/database.types";
@@ -19,39 +19,23 @@ export default async function HomePage() {
   }
 
   const supabase = await createClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  const claims = claimsData?.claims;
 
-  if (!user) {
+  if (claimsError || !claims?.sub) {
     redirect("/login");
   }
 
-  if (!isAllowedSchoolEmail(user.email)) {
+  const email = claims.email ?? "";
+
+  if (!isAllowedSchoolEmail(email)) {
     redirect("/auth/sign-out?reason=domain");
   }
 
-  const fallbackName = getUserDisplayName(user);
-  const isAdmin = isAdminEmail(user.email);
+  const fallbackName = getClaimsDisplayName(claims);
+  const isAdmin = isAdminEmail(email);
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id,email,name,created_at")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (!profile) {
-    await supabase.from("profiles").upsert(
-      {
-        id: user.id,
-        email: user.email ?? "",
-        name: fallbackName
-      },
-      { onConflict: "id" }
-    );
-  }
-
-  const { startKey, endKey } = getReservationRange();
+  const { startKey, endKey } = getReservationQueryRange();
 
   const [{ data: facilities }, { data: reservations }] = await Promise.all([
     supabase.from("facilities").select("id,name").order("id", { ascending: true }),
@@ -68,9 +52,9 @@ export default async function HomePage() {
 
   return (
     <ReservationApp
-      currentUserId={user.id}
+      currentUserId={claims.sub}
       isAdmin={isAdmin}
-      userName={profile?.name ?? fallbackName}
+      userName={fallbackName}
       facilities={(facilities ?? []) as Facility[]}
       initialReservations={(reservations ?? []) as Reservation[]}
     />

@@ -199,7 +199,9 @@ export function ReservationApp({
   }, []);
 
   const refreshReservations = useCallback(async () => {
-    if (!dates[0] || !dates[dates.length - 1]) {
+    const endDate = dates[dates.length - 1]?.value;
+
+    if (!endDate) {
       return;
     }
 
@@ -209,15 +211,15 @@ export function ReservationApp({
       .select(
         "id,user_id,facility_id,reservation_date,start_time,end_time,reserved_by_name,created_at"
       )
-      .gte("reservation_date", dates[0].value)
-      .lte("reservation_date", dates[dates.length - 1].value)
+      .gte("reservation_date", todayKey)
+      .lte("reservation_date", endDate)
       .order("reservation_date", { ascending: true })
       .order("start_time", { ascending: true });
 
     if (data) {
       setReservations(data);
     }
-  }, [dates]);
+  }, [dates, todayKey]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {

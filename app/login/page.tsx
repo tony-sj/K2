@@ -30,15 +30,15 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   const params = await searchParams;
   const supabase = await createClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const claims = claimsData?.claims;
+  const email = claims?.email ?? "";
 
-  if (user && isAllowedSchoolEmail(user.email)) {
+  if (claims?.sub && isAllowedSchoolEmail(email)) {
     redirect("/");
   }
 
-  if (user && !isAllowedSchoolEmail(user.email)) {
+  if (claims?.sub && !isAllowedSchoolEmail(email)) {
     redirect("/auth/sign-out?reason=domain");
   }
 

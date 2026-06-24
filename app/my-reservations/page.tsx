@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getUserDisplayName, isAllowedSchoolEmail } from "@/lib/auth";
+import { isAllowedSchoolEmail } from "@/lib/auth";
 import { getSeoulTodayKey } from "@/lib/date";
 import { hasSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
@@ -36,38 +36,30 @@ export default async function MyReservationsPage() {
   }
 
   const supabase = await createClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  const claims = claimsData?.claims;
 
-  if (!user) {
+  if (claimsError || !claims?.sub) {
     redirect("/login");
   }
 
-  if (!isAllowedSchoolEmail(user.email)) {
+  const email = claims.email ?? "";
+
+  if (!isAllowedSchoolEmail(email)) {
     redirect("/auth/sign-out?reason=domain");
   }
-
-  await supabase.from("profiles").upsert(
-    {
-      id: user.id,
-      email: user.email ?? "",
-      name: getUserDisplayName(user)
-    },
-    { onConflict: "id" }
-  );
 
   const { data } = await supabase
     .from("reservations")
     .select("id,facility_id,reservation_date,start_time,end_time,facilities(name)")
-    .eq("user_id", user.id)
+    .eq("user_id", claims.sub)
     .gte("reservation_date", getSeoulTodayKey())
     .order("reservation_date", { ascending: true })
     .order("start_time", { ascending: true });
 
   return (
     <MyReservationsList
-      currentUserId={user.id}
+      currentUserId={claims.sub}
       initialReservations={mapReservations((data ?? []) as ReservationRow[])}
     />
   );
