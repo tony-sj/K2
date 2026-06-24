@@ -487,8 +487,8 @@ export function ReservationApp({
           ) : null}
         </section>
 
-        <section className="px-5 pb-3">
-          <div className="mb-2 flex items-center justify-between gap-3">
+        <section className="px-5 pb-2">
+          <div className="mb-1.5 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-[13px] font-semibold text-zinc-800">
               <CalendarDays aria-hidden="true" className="h-4 w-4 text-teal-700" />
               날짜
@@ -502,7 +502,7 @@ export function ReservationApp({
               달력
             </button>
           </div>
-          <div className="grid grid-cols-7 gap-1 pb-1">
+          <div className="grid grid-cols-7 gap-1">
             {visibleDates.map((date) => {
               const isSelected = date.value === selectedDate;
 
@@ -512,18 +512,19 @@ export function ReservationApp({
                   type="button"
                   onClick={() => handleDateChange(date.value)}
                   className={[
-                    "flex h-[56px] min-w-0 flex-col items-center justify-center rounded-lg border px-1 transition active:scale-[0.98]",
+                    "flex h-[42px] min-w-0 flex-col items-center justify-center rounded-lg border px-1 transition active:scale-[0.98]",
                     isSelected
                       ? "border-zinc-950 bg-zinc-950 text-white"
-                      : "border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50"
+                      : date.isToday
+                        ? "border-teal-100 bg-teal-50 text-teal-800"
+                        : "border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50"
                   ].join(" ")}
                 >
-                  <span className="text-[11px] font-medium opacity-75">
-                    {date.weekday}
+                  <span className="text-[13px] font-bold leading-none">
+                    {date.month.replace("월", "")}/{date.day}
                   </span>
-                  <span className="mt-0.5 text-base font-bold">{date.day}</span>
-                  <span className="text-[10px] opacity-70">
-                    {date.isToday ? "오늘" : date.month}
+                  <span className="mt-1 text-[10px] font-semibold leading-none opacity-70">
+                    {date.weekday}
                   </span>
                 </button>
               );
