@@ -118,6 +118,7 @@ export function ReservationApp({
   const timeSlotListRef = useRef<HTMLDivElement>(null);
   const hourSlotRefs = useRef(new Map<number, HTMLElement>());
   const calendarMonthRefs = useRef(new Map<string, HTMLElement>());
+  const loadedPastReservationDatesRef = useRef(new Set<string>());
   const [isPending, startTransition] = useTransition();
   const [pendingOperation, setPendingOperation] =
     useState<PendingOperation | null>(null);
@@ -221,6 +222,31 @@ export function ReservationApp({
     }
   }, [dates, todayKey]);
 
+  const refreshReservationDate = useCallback(async (reservationDate: string) => {
+    loadedPastReservationDatesRef.current.add(reservationDate);
+
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("reservations")
+      .select(
+        "id,user_id,facility_id,reservation_date,start_time,end_time,reserved_by_name,created_at"
+      )
+      .eq("reservation_date", reservationDate)
+      .order("reservation_date", { ascending: true })
+      .order("start_time", { ascending: true });
+
+    if (!data) {
+      return;
+    }
+
+    setReservations((current) => [
+      ...current.filter(
+        (reservation) => reservation.reservation_date !== reservationDate
+      ),
+      ...data
+    ]);
+  }, []);
+
   useEffect(() => {
     const intervalId = window.setInterval(() => {
       setCurrentSeoulTime({
@@ -321,6 +347,10 @@ export function ReservationApp({
     setSelectedDate(date);
     setIsCalendarSheetOpen(false);
     resetSelection();
+
+    if (date < todayKey && !loadedPastReservationDatesRef.current.has(date)) {
+      void refreshReservationDate(date);
+    }
   };
 
   const handleHourClick = (hour: number) => {
