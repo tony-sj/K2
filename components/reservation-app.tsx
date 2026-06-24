@@ -114,6 +114,8 @@ export function ReservationApp({
   const [isFacilitySheetOpen, setIsFacilitySheetOpen] = useState(false);
   const [isCalendarSheetOpen, setIsCalendarSheetOpen] = useState(false);
   const [isMyReservationsOpen, setIsMyReservationsOpen] = useState(false);
+  const stickyHeaderRef = useRef<HTMLDivElement>(null);
+  const timeSlotListRef = useRef<HTMLDivElement>(null);
   const hourSlotRefs = useRef(new Map<number, HTMLElement>());
   const calendarMonthRefs = useRef(new Map<string, HTMLElement>());
   const [isPending, startTransition] = useTransition();
@@ -261,12 +263,32 @@ export function ReservationApp({
     }
 
     const targetHour = getNearestReservableHour(selectedDate);
-    window.setTimeout(() => {
-      hourSlotRefs.current.get(targetHour)?.scrollIntoView({
-        behavior: "smooth",
-        block: "start"
+    const timeoutId = window.setTimeout(() => {
+      const targetElement =
+        targetHour === 0
+          ? timeSlotListRef.current
+          : hourSlotRefs.current.get(targetHour);
+
+      if (!targetElement) {
+        return;
+      }
+
+      const stickyHeaderHeight =
+        stickyHeaderRef.current?.getBoundingClientRect().height ?? 0;
+      const targetTop =
+        targetElement.getBoundingClientRect().top +
+        window.scrollY -
+        stickyHeaderHeight;
+
+      window.scrollTo({
+        top: Math.max(targetTop, 0),
+        behavior: "smooth"
       });
     }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [selectedDate]);
 
   useEffect(() => {
@@ -415,7 +437,10 @@ export function ReservationApp({
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col bg-white">
-      <div className="sticky top-0 z-30 border-b border-zinc-100 bg-white/95 backdrop-blur">
+      <div
+        ref={stickyHeaderRef}
+        className="sticky top-0 z-30 border-b border-zinc-100 bg-white/95 backdrop-blur"
+      >
         <header className="px-5 pb-3 pt-4">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 text-[13px] font-semibold text-zinc-900">
@@ -538,7 +563,7 @@ export function ReservationApp({
             }
           }}
         >
-          <div className="space-y-2">
+          <div ref={timeSlotListRef} className="space-y-2">
             {HOURS.map((hour) => {
               const reservationForHour = getReservationForHour(selectedReservations, hour);
               const isReserved = Boolean(reservationForHour);
@@ -574,7 +599,7 @@ export function ReservationApp({
                 pendingOperation.reservationId === reservationForHour?.id &&
                 pendingOperation.hour === hour;
               const rowClassName = [
-                "scroll-mt-[260px] flex min-h-[62px] w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition",
+                "flex min-h-[62px] w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition",
                 isReserved || isPastSlot
                   ? "border-zinc-200 bg-zinc-100 text-zinc-500"
                   : isInRange || isDraftStart
