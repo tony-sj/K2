@@ -122,16 +122,11 @@ export function ReservationApp({
   const isBusy = pendingOperation !== null || isPending;
 
   const visibleDates = useMemo(() => {
-    const visibleCount = Math.min(5, dates.length);
-    const selectedIndex = dates.findIndex((date) => date.value === selectedDate);
-    const centerIndex = selectedIndex >= 0 ? selectedIndex : Math.max(todayIndex, 0);
-    const startIndex = Math.min(
-      Math.max(centerIndex - Math.floor(visibleCount / 2), 0),
-      Math.max(dates.length - visibleCount, 0)
-    );
+    const visibleCount = Math.min(7, dates.length);
+    const startIndex = Math.max(todayIndex, 0);
 
     return dates.slice(startIndex, startIndex + visibleCount);
-  }, [dates, selectedDate, todayIndex]);
+  }, [dates, todayIndex]);
 
   const selectedReservations = useMemo(() => {
     return reservations.filter(
@@ -482,7 +477,7 @@ export function ReservationApp({
               달력
             </button>
           </div>
-          <div className="no-scrollbar flex justify-center gap-2 overflow-x-auto pb-1">
+          <div className="grid grid-cols-7 gap-1 pb-1">
             {visibleDates.map((date) => {
               const isSelected = date.value === selectedDate;
 
@@ -492,7 +487,7 @@ export function ReservationApp({
                   type="button"
                   onClick={() => handleDateChange(date.value)}
                   className={[
-                    "flex h-[56px] min-w-[48px] flex-col items-center justify-center rounded-lg border px-2 transition active:scale-[0.98]",
+                    "flex h-[56px] min-w-0 flex-col items-center justify-center rounded-lg border px-1 transition active:scale-[0.98]",
                     isSelected
                       ? "border-zinc-950 bg-zinc-950 text-white"
                       : "border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50"
