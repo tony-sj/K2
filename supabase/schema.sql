@@ -106,6 +106,97 @@ as $$
   select public.can_cancel_reservation(target_date, target_start_time);
 $$;
 
+create or replace function public.cancel_reservation_hour(
+  target_reservation_id uuid,
+  target_start_time integer
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  reservation_row public.reservations%rowtype;
+  requesting_user uuid := auth.uid();
+begin
+  if requesting_user is null then
+    raise exception 'Authentication required.';
+  end if;
+
+  if target_start_time < 0 or target_start_time > 23 then
+    raise exception 'Invalid cancellation hour.';
+  end if;
+
+  select *
+  into reservation_row
+  from public.reservations
+  where id = target_reservation_id
+  for update;
+
+  if not found then
+    raise exception 'Reservation not found.';
+  end if;
+
+  if reservation_row.user_id <> requesting_user then
+    raise exception 'Only the reservation owner can cancel it.';
+  end if;
+
+  if not public.is_med_kku_user() then
+    raise exception 'School account required.';
+  end if;
+
+  if target_start_time < reservation_row.start_time
+    or target_start_time >= reservation_row.end_time then
+    raise exception 'Cancellation hour is outside the reservation.';
+  end if;
+
+  if not public.can_cancel_reservation(
+    reservation_row.reservation_date,
+    target_start_time
+  ) then
+    raise exception 'This hour has already started.';
+  end if;
+
+  if reservation_row.start_time = target_start_time
+    and reservation_row.end_time = target_start_time + 1 then
+    delete from public.reservations
+    where id = reservation_row.id;
+  elsif reservation_row.start_time = target_start_time then
+    update public.reservations
+    set start_time = target_start_time + 1
+    where id = reservation_row.id;
+  elsif reservation_row.end_time = target_start_time + 1 then
+    update public.reservations
+    set end_time = target_start_time
+    where id = reservation_row.id;
+  else
+    update public.reservations
+    set end_time = target_start_time
+    where id = reservation_row.id;
+
+    insert into public.reservations (
+      user_id,
+      facility_id,
+      reservation_date,
+      start_time,
+      end_time,
+      reserved_by_name
+    )
+    values (
+      reservation_row.user_id,
+      reservation_row.facility_id,
+      reservation_row.reservation_date,
+      target_start_time + 1,
+      reservation_row.end_time,
+      reservation_row.reserved_by_name
+    );
+  end if;
+end;
+$$;
+
+revoke execute on function public.cancel_reservation_hour(uuid, integer) from anon, public;
+grant execute on function public.cancel_reservation_hour(uuid, integer) to authenticated;
+
 alter table public.profiles enable row level security;
 alter table public.facilities enable row level security;
 alter table public.reservations enable row level security;

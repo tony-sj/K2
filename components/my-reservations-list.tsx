@@ -70,6 +70,8 @@ export function MyReservationsList({
   const [reservations, setReservations] = useState(initialReservations);
   const [notice, setNotice] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [pendingReservationId, setPendingReservationId] = useState<string | null>(null);
+  const isBusy = pendingReservationId !== null || isPending;
 
   const refreshReservations = useCallback(async () => {
     const supabase = createClient();
@@ -105,16 +107,22 @@ export function MyReservationsList({
   }, [refreshReservations]);
 
   const handleCancel = (reservationId: string) => {
+    setPendingReservationId(reservationId);
+
     startTransition(async () => {
-      const result = await cancelReservation({ reservationId });
-      setNotice(result.message);
+      try {
+        const result = await cancelReservation({ reservationId });
+        setNotice(result.message);
 
-      if (!result.ok) {
-        window.alert(result.message);
-        return;
+        if (!result.ok) {
+          window.alert(result.message);
+          return;
+        }
+
+        await refreshReservations();
+      } finally {
+        setPendingReservationId(null);
       }
-
-      await refreshReservations();
     });
   };
 
@@ -154,6 +162,8 @@ export function MyReservationsList({
               reservation.reservation_date,
               reservation.start_time
             );
+            const isCancellingThisReservation =
+              pendingReservationId === reservation.id;
 
             return (
               <article
@@ -189,12 +199,15 @@ export function MyReservationsList({
                   </p>
                   <button
                     type="button"
-                    disabled={!cancellable || isPending}
+                    disabled={!cancellable || isBusy}
                     onClick={() => handleCancel(reservation.id)}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-zinc-200 px-3 text-sm font-semibold text-zinc-800 disabled:bg-zinc-100 disabled:text-zinc-400"
+                    className={[
+                      "inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-zinc-200 px-3 text-sm font-semibold text-zinc-800 disabled:bg-zinc-100 disabled:text-zinc-400",
+                      isCancellingThisReservation ? "linear-busy" : ""
+                    ].join(" ")}
                   >
                     <Ban aria-hidden="true" className="h-4 w-4" />
-                    취소
+                    {isCancellingThisReservation ? "취소 중" : "취소"}
                   </button>
                 </div>
               </article>

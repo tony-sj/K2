@@ -19,6 +19,7 @@ import {
   canReserveReservation,
   formatDateKey,
   formatHour,
+  getSeoulCurrentHour,
   getNearestReservableHour,
   getReservationDateOptions,
   getReservationMonthOptions,
@@ -32,6 +33,10 @@ type ReservationRange = {
   start: number;
   end: number;
 };
+
+type PendingOperation =
+  | { type: "create" }
+  | { type: "cancel"; reservationId: string; hour?: number };
 
 type ReservationAppProps = {
   currentUserId: string;
@@ -90,7 +95,12 @@ export function ReservationApp({
 }: ReservationAppProps) {
   const dates = useMemo(() => getReservationDateOptions(), []);
   const monthOptions = useMemo(() => getReservationMonthOptions(dates), [dates]);
-  const todayKey = useMemo(() => getSeoulTodayKey(), []);
+  const [currentSeoulTime, setCurrentSeoulTime] = useState(() => ({
+    todayKey: getSeoulTodayKey(),
+    hour: getSeoulCurrentHour()
+  }));
+  const todayKey = currentSeoulTime.todayKey;
+  const currentHour = currentSeoulTime.hour;
   const todayIndex = dates.findIndex((date) => date.value === todayKey);
   const [facilityList, setFacilityList] = useState(facilities);
   const [selectedFacilityId, setSelectedFacilityId] = useState(facilities[0]?.id);
@@ -104,11 +114,24 @@ export function ReservationApp({
   const [isFacilitySheetOpen, setIsFacilitySheetOpen] = useState(false);
   const [isCalendarSheetOpen, setIsCalendarSheetOpen] = useState(false);
   const [isMyReservationsOpen, setIsMyReservationsOpen] = useState(false);
-  const todayButtonRef = useRef<HTMLButtonElement | null>(null);
-  const dateButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const hourSlotRefs = useRef(new Map<number, HTMLElement>());
   const calendarMonthRefs = useRef(new Map<string, HTMLElement>());
   const [isPending, startTransition] = useTransition();
+  const [pendingOperation, setPendingOperation] =
+    useState<PendingOperation | null>(null);
+  const isBusy = pendingOperation !== null || isPending;
+
+  const visibleDates = useMemo(() => {
+    const visibleCount = Math.min(5, dates.length);
+    const selectedIndex = dates.findIndex((date) => date.value === selectedDate);
+    const centerIndex = selectedIndex >= 0 ? selectedIndex : Math.max(todayIndex, 0);
+    const startIndex = Math.min(
+      Math.max(centerIndex - Math.floor(visibleCount / 2), 0),
+      Math.max(dates.length - visibleCount, 0)
+    );
+
+    return dates.slice(startIndex, startIndex + visibleCount);
+  }, [dates, selectedDate, todayIndex]);
 
   const selectedReservations = useMemo(() => {
     return reservations.filter(
@@ -126,6 +149,22 @@ export function ReservationApp({
   const selectedFacility = facilityList.find(
     (facility) => facility.id === selectedFacilityId
   );
+
+  const currentFacilityReservations = useMemo(() => {
+    const activeReservations = new Map<number, Reservation>();
+
+    reservations.forEach((reservation) => {
+      if (
+        reservation.reservation_date === todayKey &&
+        currentHour >= reservation.start_time &&
+        currentHour < reservation.end_time
+      ) {
+        activeReservations.set(reservation.facility_id, reservation);
+      }
+    });
+
+    return activeReservations;
+  }, [currentHour, reservations, todayKey]);
 
   const myReservations = useMemo(() => {
     return reservations
@@ -184,6 +223,19 @@ export function ReservationApp({
   }, [dates]);
 
   useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCurrentSeoulTime({
+        todayKey: getSeoulTodayKey(),
+        hour: getSeoulCurrentHour()
+      });
+    }, 60_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  useEffect(() => {
     const supabase = createClient();
     const channel = supabase
       .channel("reservation-and-facility-changes")
@@ -209,23 +261,9 @@ export function ReservationApp({
   }, [refreshFacilities, refreshReservations]);
 
   useEffect(() => {
-    todayButtonRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-      inline: "center"
-    });
-  }, []);
-
-  useEffect(() => {
     if (!selectedDate) {
       return;
     }
-
-    dateButtonRefs.current.get(selectedDate)?.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-      inline: "center"
-    });
 
     const targetHour = getNearestReservableHour(selectedDate);
     window.setTimeout(() => {
@@ -315,41 +353,70 @@ export function ReservationApp({
       return;
     }
 
+    setPendingOperation({ type: "create" });
+
     startTransition(async () => {
-      const result = await createReservation({
-        facilityId: selectedFacilityId,
-        reservationDate: selectedDate,
-        startTime: selectedRange.start,
-        endTime: selectedRange.end
-      });
+      try {
+        const result = await createReservation({
+          facilityId: selectedFacilityId,
+          reservationDate: selectedDate,
+          startTime: selectedRange.start,
+          endTime: selectedRange.end
+        });
 
-      setNotice(result.message);
+        setNotice(result.message);
 
-      if (!result.ok) {
+        if (!result.ok) {
+          resetSelection();
+          window.alert(result.message);
+          await refreshReservations();
+          return;
+        }
+
         resetSelection();
-        window.alert(result.message);
         await refreshReservations();
-        return;
+      } finally {
+        setPendingOperation(null);
       }
-
-      resetSelection();
-      await refreshReservations();
     });
   };
 
-  const handleCancelReservation = (reservationId: string) => {
+  const handleCancelReservation = (reservationId: string, cancelStartTime?: number) => {
+    setPendingOperation({
+      type: "cancel",
+      reservationId,
+      hour: cancelStartTime
+    });
+
     startTransition(async () => {
-      const result = await cancelReservation({ reservationId });
-      setNotice(result.message);
+      try {
+        const result = await cancelReservation({ reservationId, cancelStartTime });
+        setNotice(result.message);
 
-      if (!result.ok) {
-        window.alert(result.message);
-        return;
+        if (!result.ok) {
+          window.alert(result.message);
+          return;
+        }
+
+        await refreshReservations();
+      } finally {
+        setPendingOperation(null);
       }
-
-      await refreshReservations();
     });
   };
+
+  const submitButtonLabel =
+    pendingOperation?.type === "cancel"
+      ? "취소 중"
+      : pendingOperation?.type === "create"
+        ? "예약 중"
+        : "예약하기";
+  const isSubmitUnavailable =
+    !selectedRange ||
+    !selectedFacility ||
+    !selectedDate ||
+    !canReserveReservation(selectedDate, selectedRange.start);
+  const isSubmitDisabled = isSubmitUnavailable || isBusy;
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col bg-white">
@@ -415,24 +482,13 @@ export function ReservationApp({
               달력
             </button>
           </div>
-          <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
-            {dates.map((date) => {
+          <div className="no-scrollbar flex justify-center gap-2 overflow-x-auto pb-1">
+            {visibleDates.map((date) => {
               const isSelected = date.value === selectedDate;
 
               return (
                 <button
                   key={date.value}
-                  ref={(node) => {
-                    if (node) {
-                      dateButtonRefs.current.set(date.value, node);
-                    } else {
-                      dateButtonRefs.current.delete(date.value);
-                    }
-
-                    if (date.isToday) {
-                      todayButtonRef.current = node;
-                    }
-                  }}
                   type="button"
                   onClick={() => handleDateChange(date.value)}
                   className={[
@@ -516,8 +572,12 @@ export function ReservationApp({
                 reservationForHour !== undefined &&
                 canReserveReservation(
                   reservationForHour.reservation_date,
-                  reservationForHour.start_time
+                  hour
                 );
+              const isCancellingThisHour =
+                pendingOperation?.type === "cancel" &&
+                pendingOperation.reservationId === reservationForHour?.id &&
+                pendingOperation.hour === hour;
               const rowClassName = [
                 "scroll-mt-[260px] flex min-h-[62px] w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition",
                 isReserved || isPastSlot
@@ -547,6 +607,52 @@ export function ReservationApp({
                 </>
               );
 
+              if (isReserved && canCancelMine) {
+                return (
+                  <button
+                    key={hour}
+                    ref={(node) => {
+                      if (node) {
+                        hourSlotRefs.current.set(hour, node);
+                      } else {
+                        hourSlotRefs.current.delete(hour);
+                      }
+                    }}
+                    type="button"
+                    disabled={isBusy}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleCancelReservation(reservationForHour.id, hour);
+                    }}
+                    className={[
+                      rowClassName,
+                      "hover:bg-zinc-50 disabled:active:scale-100",
+                      isCancellingThisHour ? "linear-busy" : ""
+                    ].join(" ")}
+                    title="해당 1시간 예약 취소"
+                  >
+                    {slotContent}
+                    <span
+                      className={[
+                        "ml-3 inline-flex h-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600",
+                        isCancellingThisHour
+                          ? "min-w-[64px] px-2 text-xs font-semibold"
+                          : "w-9"
+                      ].join(" ")}
+                    >
+                      {isCancellingThisHour ? (
+                        "취소 중"
+                      ) : (
+                        <>
+                          <X aria-hidden="true" className="h-4 w-4" />
+                          <span className="sr-only">해당 1시간 예약 취소</span>
+                        </>
+                      )}
+                    </span>
+                  </button>
+                );
+              }
+
               if (isReserved) {
                 return (
                   <div
@@ -561,21 +667,6 @@ export function ReservationApp({
                     className={rowClassName}
                   >
                     {slotContent}
-                    {canCancelMine ? (
-                      <button
-                        type="button"
-                        disabled={isPending}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleCancelReservation(reservationForHour.id);
-                        }}
-                        className="ml-3 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 disabled:text-zinc-300"
-                        title="예약 취소"
-                      >
-                        <X aria-hidden="true" className="h-4 w-4" />
-                        <span className="sr-only">예약 취소</span>
-                      </button>
-                    ) : null}
                   </div>
                 );
               }
@@ -619,18 +710,23 @@ export function ReservationApp({
         </div>
         <button
           type="button"
-          disabled={
-            !selectedRange ||
-            !selectedFacility ||
-            !selectedDate ||
-            !canReserveReservation(selectedDate, selectedRange.start) ||
-            isPending
-          }
+          disabled={isSubmitDisabled}
           onClick={handleSubmit}
-          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-teal-700 px-4 text-[15px] font-semibold text-white shadow-soft transition active:scale-[0.99] disabled:bg-zinc-200 disabled:text-zinc-500 disabled:shadow-none"
+          className={[
+            "inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg px-4 text-[15px] font-semibold transition",
+            isSubmitUnavailable && !isBusy
+              ? "bg-zinc-200 text-zinc-500 shadow-none"
+              : "bg-teal-700 text-white shadow-soft",
+            isBusy ? "cursor-wait linear-busy linear-busy-light" : "active:scale-[0.99]",
+            isSubmitDisabled ? "disabled:active:scale-100" : ""
+          ].join(" ")}
         >
-          <Check aria-hidden="true" className="h-4 w-4" />
-          {isPending ? "예약 중" : "예약하기"}
+          {pendingOperation?.type === "cancel" ? (
+            <Ban aria-hidden="true" className="h-4 w-4" />
+          ) : (
+            <Check aria-hidden="true" className="h-4 w-4" />
+          )}
+          {submitButtonLabel}
         </button>
       </div>
 
@@ -665,6 +761,7 @@ export function ReservationApp({
               <div className="space-y-2">
                 {facilityList.map((facility) => {
                   const isSelected = facility.id === selectedFacilityId;
+                  const currentReservation = currentFacilityReservations.get(facility.id);
 
                   return (
                     <button
@@ -672,14 +769,23 @@ export function ReservationApp({
                       type="button"
                       onClick={() => handleFacilityChange(facility.id)}
                       className={[
-                        "flex h-14 w-full items-center justify-between rounded-lg border px-4 text-left",
+                        "flex min-h-14 w-full items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left",
                         isSelected
                           ? "border-teal-700 bg-teal-50 text-teal-950"
                           : "border-zinc-200 bg-white text-zinc-900"
                       ].join(" ")}
                     >
-                      <span className="text-sm font-semibold">{facility.name}</span>
-                      <span className="text-xs font-semibold">
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold">
+                          {facility.name}
+                        </span>
+                        {currentReservation ? (
+                          <span className="mt-1 block truncate text-xs font-semibold text-amber-700">
+                            사용 중 · {currentReservation.reserved_by_name}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="shrink-0 text-xs font-semibold">
                         {isSelected ? "선택됨" : "선택"}
                       </span>
                     </button>
@@ -822,6 +928,10 @@ export function ReservationApp({
                     reservation.reservation_date,
                     reservation.start_time
                   );
+                  const isCancellingThisReservation =
+                    pendingOperation?.type === "cancel" &&
+                    pendingOperation.reservationId === reservation.id &&
+                    pendingOperation.hour === undefined;
 
                   return (
                     <article
@@ -852,12 +962,15 @@ export function ReservationApp({
                       <div className="mt-4 flex justify-end">
                         <button
                           type="button"
-                          disabled={!canCancel || isPending}
+                          disabled={!canCancel || isBusy}
                           onClick={() => handleCancelReservation(reservation.id)}
-                          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-zinc-200 px-3 text-sm font-semibold text-zinc-800 disabled:bg-zinc-100 disabled:text-zinc-400"
+                          className={[
+                            "inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-zinc-200 px-3 text-sm font-semibold text-zinc-800 disabled:bg-zinc-100 disabled:text-zinc-400",
+                            isCancellingThisReservation ? "linear-busy" : ""
+                          ].join(" ")}
                         >
                           <Ban aria-hidden="true" className="h-4 w-4" />
-                          취소
+                          {isCancellingThisReservation ? "취소 중" : "취소"}
                         </button>
                       </div>
                     </article>

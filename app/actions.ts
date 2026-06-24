@@ -31,6 +31,7 @@ type CreateFacilityInput = {
 
 type CancelReservationInput = {
   reservationId: string;
+  cancelStartTime?: number;
 };
 
 const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -210,6 +211,15 @@ export async function deleteFacility(
 export async function cancelReservation(
   input: CancelReservationInput
 ): Promise<ActionResult> {
+  if (
+    input.cancelStartTime !== undefined &&
+    (!Number.isInteger(input.cancelStartTime) ||
+      input.cancelStartTime < 0 ||
+      input.cancelStartTime > 23)
+  ) {
+    return { ok: false, message: "취소할 시간이 올바르지 않습니다." };
+  }
+
   const { supabase, user, message } = await getAuthorizedUser();
 
   if (!user) {
@@ -218,7 +228,7 @@ export async function cancelReservation(
 
   const { data: reservation, error: reservationError } = await supabase
     .from("reservations")
-    .select("id,user_id,reservation_date,start_time")
+    .select("id,user_id,reservation_date,start_time,end_time")
     .eq("id", input.reservationId)
     .maybeSingle();
 
@@ -228,6 +238,33 @@ export async function cancelReservation(
 
   if (reservation.user_id !== user.id) {
     return { ok: false, message: "본인 예약만 취소할 수 있습니다." };
+  }
+
+  if (input.cancelStartTime !== undefined) {
+    if (
+      input.cancelStartTime < reservation.start_time ||
+      input.cancelStartTime >= reservation.end_time
+    ) {
+      return { ok: false, message: "선택한 시간이 예약 범위에 포함되지 않습니다." };
+    }
+
+    if (!canCancelReservation(reservation.reservation_date, input.cancelStartTime)) {
+      return { ok: false, message: "이미 시작된 시간은 취소할 수 없습니다." };
+    }
+
+    const { error } = await supabase.rpc("cancel_reservation_hour", {
+      target_reservation_id: input.reservationId,
+      target_start_time: input.cancelStartTime
+    });
+
+    if (error) {
+      return { ok: false, message: "선택한 시간의 예약 취소에 실패했습니다." };
+    }
+
+    revalidatePath("/");
+    revalidatePath("/my-reservations");
+
+    return { ok: true, message: "선택한 시간의 예약이 취소되었습니다." };
   }
 
   if (!canCancelReservation(reservation.reservation_date, reservation.start_time)) {

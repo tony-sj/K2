@@ -68,6 +68,10 @@ export function getSeoulTodayKey() {
   return `${year}-${pad(month)}-${pad(day)}`;
 }
 
+export function getSeoulCurrentHour() {
+  return getZonedDateParts(new Date()).hour;
+}
+
 function parseDateKey(dateKey: string) {
   const [year, month, day] = dateKey.split("-").map(Number);
   return new Date(year, month - 1, day);

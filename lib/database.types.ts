@@ -108,6 +108,10 @@ export type Database = {
         Args: { target_date: string; target_start_time: number };
         Returns: boolean;
       };
+      cancel_reservation_hour: {
+        Args: { target_reservation_id: string; target_start_time: number };
+        Returns: undefined;
+      };
       is_admin_user: {
         Args: Record<PropertyKey, never>;
         Returns: boolean;
