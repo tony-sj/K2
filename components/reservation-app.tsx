@@ -863,9 +863,6 @@ export function ReservationApp({
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <p className="text-[13px] font-medium text-teal-700">날짜 선택</p>
-                <h2 className="mt-1 text-lg font-bold text-zinc-950">
-                  예약 현황을 볼 날짜
-                </h2>
               </div>
               <button
                 type="button"
