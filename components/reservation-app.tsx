@@ -44,6 +44,7 @@ type ReservationAppProps = {
   userName: string;
   facilities: Facility[];
   initialReservations: Reservation[];
+  initialDataLoaded?: boolean;
 };
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
@@ -91,7 +92,8 @@ export function ReservationApp({
   isAdmin,
   userName,
   facilities,
-  initialReservations
+  initialReservations,
+  initialDataLoaded = true
 }: ReservationAppProps) {
   const dates = useMemo(() => getReservationDateOptions(), []);
   const monthOptions = useMemo(() => getReservationMonthOptions(dates), [dates]);
@@ -108,6 +110,8 @@ export function ReservationApp({
     dates[todayIndex >= 0 ? todayIndex : 0]?.value
   );
   const [reservations, setReservations] = useState(initialReservations);
+  const [isInitialDataLoaded, setIsInitialDataLoaded] =
+    useState(initialDataLoaded);
   const [draftStart, setDraftStart] = useState<number | null>(null);
   const [selectedRange, setSelectedRange] = useState<ReservationRange | null>(null);
   const [notice, setNotice] = useState("");
@@ -258,6 +262,26 @@ export function ReservationApp({
       ...data
     ]);
   }, []);
+
+  useEffect(() => {
+    if (isInitialDataLoaded) {
+      return;
+    }
+
+    let isActive = true;
+    const timeoutId = window.setTimeout(() => {
+      Promise.all([refreshFacilities(), refreshReservations()]).finally(() => {
+        if (isActive) {
+          setIsInitialDataLoaded(true);
+        }
+      });
+    }, 0);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [isInitialDataLoaded, refreshFacilities, refreshReservations]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -519,12 +543,15 @@ export function ReservationApp({
             className="flex h-11 w-full items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-left"
           >
             <p className="truncate text-sm font-semibold text-zinc-950">
-              {selectedFacility?.name ?? "시설을 선택해 주세요"}
+              {selectedFacility?.name ??
+                (isInitialDataLoaded
+                  ? "시설을 선택해 주세요"
+                  : "시설 정보를 불러오는 중")}
             </p>
             <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-zinc-500" />
           </button>
 
-          {facilityList.length === 0 ? (
+          {facilityList.length === 0 && isInitialDataLoaded ? (
             <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
               등록된 시설이 없습니다.
             </p>
@@ -583,7 +610,9 @@ export function ReservationApp({
               시간
             </div>
             <p className="truncate text-xs font-medium text-zinc-500">
-              {selectedFacility?.name ?? "시설 미선택"} · {selectedDate}
+              {selectedFacility?.name ??
+                (isInitialDataLoaded ? "시설 미선택" : "불러오는 중")}{" "}
+              · {selectedDate}
             </p>
           </div>
         </section>
@@ -597,6 +626,12 @@ export function ReservationApp({
         {notice ? (
           <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-[13px] font-medium text-amber-950">
             {notice}
+          </p>
+        ) : null}
+
+        {!isInitialDataLoaded ? (
+          <p className="mb-3 rounded-lg bg-zinc-50 px-3 py-2 text-[13px] font-medium text-zinc-600">
+            예약 정보를 불러오는 중입니다.
           </p>
         ) : null}
 

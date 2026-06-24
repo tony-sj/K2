@@ -114,19 +114,6 @@ export function getReservationRange() {
   };
 }
 
-export function getReservationQueryRange() {
-  const startDate = getSeoulToday();
-  const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + RESERVATION_FUTURE_DAYS);
-
-  return {
-    startDate,
-    endDate,
-    startKey: toDateKey(startDate),
-    endKey: toDateKey(endDate)
-  };
-}
-
 export function getReservationDateOptions(): DateOption[] {
   const { startDate, endDate } = getReservationRange();
   const todayKey = getSeoulTodayKey();

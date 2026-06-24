@@ -1,62 +1,67 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import {
   getClaimsDisplayName,
   isAdminEmail,
   isAllowedSchoolEmail
 } from "@/lib/auth";
-import { getReservationQueryRange } from "@/lib/date";
 import { hasSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
-import type { Facility, Reservation } from "@/lib/database.types";
 import { ReservationApp } from "@/components/reservation-app";
 import { SetupNotice } from "@/components/setup-notice";
 
 export const dynamic = "force-dynamic";
+
+const USER_ID_HEADER = "x-k2-user-id";
+const USER_EMAIL_HEADER = "x-k2-user-email";
+const USER_NAME_HEADER = "x-k2-user-name";
+
+function decodeHeaderValue(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
 
 export default async function HomePage() {
   if (!hasSupabaseEnv()) {
     return <SetupNotice />;
   }
 
-  const supabase = await createClient();
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  const claims = claimsData?.claims;
+  const requestHeaders = await headers();
+  let userId = requestHeaders.get(USER_ID_HEADER);
+  let email = requestHeaders.get(USER_EMAIL_HEADER) ?? "";
+  let fallbackName = decodeHeaderValue(requestHeaders.get(USER_NAME_HEADER) ?? "");
 
-  if (claimsError || !claims?.sub) {
-    redirect("/login");
+  if (!userId) {
+    const supabase = await createClient();
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+    const claims = claimsData?.claims;
+
+    if (claimsError || !claims?.sub) {
+      redirect("/login");
+    }
+
+    userId = claims.sub;
+    email = claims.email ?? "";
+    fallbackName = getClaimsDisplayName(claims);
   }
-
-  const email = claims.email ?? "";
 
   if (!isAllowedSchoolEmail(email)) {
     redirect("/auth/sign-out?reason=domain");
   }
 
-  const fallbackName = getClaimsDisplayName(claims);
   const isAdmin = isAdminEmail(email);
-
-  const { startKey, endKey } = getReservationQueryRange();
-
-  const [{ data: facilities }, { data: reservations }] = await Promise.all([
-    supabase.from("facilities").select("id,name").order("id", { ascending: true }),
-    supabase
-      .from("reservations")
-      .select(
-        "id,user_id,facility_id,reservation_date,start_time,end_time,reserved_by_name,created_at"
-      )
-      .gte("reservation_date", startKey)
-      .lte("reservation_date", endKey)
-      .order("reservation_date", { ascending: true })
-      .order("start_time", { ascending: true })
-  ]);
 
   return (
     <ReservationApp
-      currentUserId={claims.sub}
+      currentUserId={userId}
       isAdmin={isAdmin}
-      userName={fallbackName}
-      facilities={(facilities ?? []) as Facility[]}
-      initialReservations={(reservations ?? []) as Reservation[]}
+      userName={fallbackName || email.split("@")[0] || "사용자"}
+      facilities={[]}
+      initialReservations={[]}
+      initialDataLoaded={false}
     />
   );
 }
