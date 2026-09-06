@@ -1,6 +1,9 @@
 # K2
 
-의과대학 시설 예약 애플리케이션 초기 구현입니다.
+의과대학 시설 예약 어플리케이션
+
+<img width="981" height="1283" alt="그림01" src="https://github.com/user-attachments/assets/20a1cbb6-b601-4876-ae9f-f09eebaf2501" />
+
 
 ## Stack
 
